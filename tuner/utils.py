@@ -8,9 +8,47 @@ from numpy.core.fromnumeric import compress
 import pandas as pd
 import numpy as np
 from operator import itemgetter
-from sklearn.preprocessing import LabelEncoder
-import logging
 
+import logging
+from scipy.spatial import distance
+
+def get_filename(PATH, head, tail):
+    i = 0
+    today = datetime.datetime.now()
+    name = head+'-'+today.strftime('%Y%m%d')+'-'+'%02d'%i+tail
+    while os.path.exists(os.path.join(PATH, name)):
+        i += 1
+        name = head+'-'+today.strftime('%Y%m%d')+'-'+'%02d'%i+tail
+    return name
+
+def get_logger(log_path='./logs'):
+
+    if not os.path.exists(log_path):
+        os.mkdir(log_path)
+
+    logger = logging.getLogger()
+    date_format = '%Y-%m-%d %H:%M:%S'
+    formatter = logging.Formatter('%(asctime)s[%(levelname)s] %(filename)s:%(lineno)s  %(message)s', date_format)
+    name = get_filename(log_path, 'log', '.log')
+    # i = 0
+    # today = datetime.datetime.now()
+    # name = 'log-'+today.strftime('%Y%m%d')+'-'+'%02d'%i+'.log'
+    # while os.path.exists(os.path.join(log_path, name)):
+    #     i += 1
+    #     name = 'log-'+today.strftime('%Y%m%d')+'-'+'%02d'%i+'.log'
+    
+    fileHandler = logging.FileHandler(os.path.join(log_path, name))
+    streamHandler = logging.StreamHandler()
+    
+    fileHandler.setFormatter(formatter)
+    streamHandler.setFormatter(formatter)
+    
+    logger.addHandler(fileHandler)
+    logger.addHandler(streamHandler)
+    
+    logger.setLevel(logging.INFO)
+    logger.info('Writing logs at {}'.format(os.path.join(log_path, name)))
+    return logger, os.path.join(log_path, name)
 
 def time_start():
     return time.time()
@@ -36,19 +74,25 @@ def time_to_str(timestamp):
     return datetime.datetime.\
         fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
 
-
 class Logger:
 
     def __init__(self, name, log_file=''):
         self.log_file = log_file
         self.logger = logging.getLogger(name)
         self.logger.setLevel(logging.DEBUG)
+        date_format = '%Y-%m-%d %H:%M:%S'
+        formatter = logging.Formatter('%(asctime)s[%(levelname)s] %(filename)s:%(lineno)s  %(message)s', date_format)
         sh = logging.StreamHandler()
+        fh = logging.FileHandler(log_file)
+        sh.setFormatter(formatter)
+        fh.setFormatter(formatter)
         self.logger.addHandler(sh)
+        self.logger.addHandler(fh)
         if len(log_file) > 0:
             self.log2file = True
         else:
             self.log2file = False
+        
 
     def _write_file(self, msg):
         if self.log2file:
@@ -64,16 +108,18 @@ class Logger:
         msg = "%s[WARN] %s" % (self.get_timestr(), msg)
         self.logger.warning(msg)
         self._write_file(msg)
+        print(msg)
 
     def info(self, msg):
         msg = "%s[INFO] %s" % (self.get_timestr(), msg)
         #self.logger.info(msg)
         self._write_file(msg)
+        print(msg)
 
     def error(self, msg):
-        msg = "%s[ERROR] %s" % (self.get_timestr(), msg)
+        # msg = "%s[ERROR] %s" % (self.get_timestr(), msg)
         self.logger.error(msg)
-        self._write_file(msg)
+        # self._write_file(msg)
 
 
 def save_state_actions(state_action, filename):
@@ -82,221 +128,7 @@ def save_state_actions(state_action, filename):
     pickle.dump(state_action, f)
     f.close()
 
-def redis_knobs_make_dict(knobs_path):
-    '''
-        input: DataFrame form (samples_num, knobs_num)
-        output: Dictionary form --> RDB and AOF
-            ex. dict_knobs = {'columnlabels'=array([['knobs_1', 'knobs_2', ...],['knobs_1', 'knobs_2', ...], ...]),
-                                'rowlabels'=array([1, 2, ...]),
-                                'data'=array([[1,2,3,...], [2,3,4,...], ...[]])}
 
-        For mode selection knob, "yes" -> 1 , "no" -> 0
-    '''
-    config_files = os.listdir(knobs_path)
-
-    dict_RDB = {}
-    dict_AOF = {}
-    RDB_datas = []
-    RDB_columns = []
-    RDB_rowlabels = []
-    AOF_datas = []
-    AOF_columns = []
-    AOF_rowlabels = []
-    ISAOF = 0
-    ISRDB = 1
-
-    for m in range(len(config_files)):
-        flag = 0
-        datas = []
-        columns = []
-        knob_path = os.path.join(knobs_path, 'config'+str(m+1)+'.conf')
-        f = open(knob_path, 'r')
-        config_file = f.readlines()
-        knobs_list = config_file[config_file.index('\n')+1:]
-
-        cnt = 1
-
-        for l in knobs_list:
-            if l.split()[0] != 'save':
-                col, d = l.split()
-                if d.isalpha():
-                    if d in ["no","yes"]:
-                        d = ["no","yes"].index(d)
-                    elif d in ["always","everysec","no"]:
-                        d = ["always","everysec","no"].index(d)
-                elif d.endswith("mb"):
-                    d = d[:-2]
-                datas.append(d)
-                columns.append(col)
-            else:
-                col, d1, d2 = l.split()
-                columns.append(col+str(cnt)+"_sec")
-                columns.append(col+str(cnt)+"_changes")
-                datas.append(d1)
-                datas.append(d2)
-                cnt += 1
-
-            if l.split()[0] == 'appendonly':
-                flag = ISAOF
-            if l.split()[0] == 'save':
-                flag = ISRDB
-
-        # add active knobs
-        if "activedefrag" not in columns:
-            columns.append("activedefrag")
-            # "0" means no
-            datas.append("0")
-            columns.append("active-defrag-threshold-lower")
-            datas.append(10)
-            columns.append("active-defrag-threshold-upper")
-            datas.append(100)
-            columns.append("active-defrag-cycle-min")
-            datas.append(5)
-            columns.append("active-defrag-cycle-max")
-            datas.append(75)
-        datas = list(map(int,datas))
-        if flag == ISRDB:
-    #         print('RDB')
-            RDB_datas.append(datas)
-            RDB_columns.append(columns)
-            RDB_rowlabels.append(m+1)
-        if flag == ISAOF: 
-    #         print('AOF')
-            AOF_datas.append(datas)
-            AOF_columns.append(columns)
-            AOF_rowlabels.append(m+1)
-
-    dict_RDB['data'] = np.array(RDB_datas)
-    dict_RDB['rowlabels'] = np.array(RDB_rowlabels)
-    dict_RDB['columnlabels'] = np.array(RDB_columns[0])
-    dict_AOF['data'] = np.array(AOF_datas)
-    dict_AOF['rowlabels'] = np.array(AOF_rowlabels)
-    dict_AOF['columnlabels'] = np.array(AOF_columns[0])
-    return dict_RDB, dict_AOF
-
-def rocksdb_knobs_make_dict(knobs_path):
-    '''
-        input: DataFrame form (samples_num, knobs_num)
-        output: Dictionary form 
-            ex. dict_knobs = {'columnlabels'=array([['knobs_1', 'knobs_2', ...],['knobs_1', 'knobs_2', ...], ...]),
-                                'rowlabels'=array([1, 2, ...]),
-                                'data'=array([[1,2,3,...], [2,3,4,...], ...[]])}
-
-        For mode selection knob, "yes" -> 1 , "no" -> 0
-    '''
-    config_files = os.listdir(knobs_path)
-
-    dict_data = {}
-    datas = []
-    columns = []
-    rowlabels = []
-
-    compression_type = ["none", "lz4", "snappy", "zlib"]
-    cache_index_and_filter_blocks = ["true", "false"]
-
-    for m in range(len(config_files)):
-        flag = 0
-        config_datas = []
-        config_columns = []
-        knob_path = os.path.join(knobs_path, 'config'+str(m+1)+'.cnf')
-        f = open(knob_path, 'r')
-        config_file = f.readlines()
-        knobs_list = config_file[1:-1]
-
-        for l in knobs_list:
-            col, _, d = l.split()
-            if d.isalpha():
-                if d in compression_type:
-                    d = compression_type.index(d)
-                elif d in cache_index_and_filter_blocks:
-                    d = cache_index_and_filter_blocks.index(d)
-            config_datas.append(d)
-            config_columns.append(col)
-
-        datas.append(config_datas)
-        columns.append(config_columns)
-        rowlabels.append(m+1)
-
-    dict_data['data'] = np.array(datas)
-    dict_data['rowlabels'] = np.array(rowlabels)
-    dict_data['columnlabels'] = np.array(columns[0])
-    return dict_data
-
-def metrics_make_dict(pd_metrics, labels):
-    '''
-        input: DataFrame form (samples_num, metrics_num)
-        output: Dictionary form
-            ex. dict_metrics = {'columnlabels'=array([['metrics_1', 'metrics_2', ...],['metrics_1', 'metrics_2', ...], ...]),
-                            'rowlabels'=array([1, 2, ...]),
-                            'data'=array([[1,2,3,...], [2,3,4,...], ...[]])}
-    '''
-    # labels = RDB or AOF rowlabels
-    
-    dict_metrics = {}
-    tmp_rowlabels = [_-1 for _ in labels]
-    pd_metrics = pd_metrics.iloc[tmp_rowlabels][:]
-    nan_columns = pd_metrics.columns[pd_metrics.isnull().any()]
-    pd_metrics = pd_metrics.drop(columns=nan_columns)
-    
-    # for i in range(len(pd_metrics)):
-    #     columns.append(pd_metrics.columns.to_list())
-    dict_metrics['columnlabels'] = np.array(pd_metrics.columns)
-    #dict_metrics['columnlabels'] = np.array(itemgetter(*tmp_rowlabels)(dict_metrics['columnlabels'].tolist()))
-    dict_metrics['rowlabels'] = np.array(labels)
-    dict_metrics['data'] = np.array(pd_metrics.values)
-    
-    return dict_metrics
-    
-
-def load_metrics(m_path = ' ', labels = [], metrics=None, mode = ' '):
-    if mode == "internal":
-        pd_metrics = pd.read_csv(m_path)
-        pd_metrics, dict_le = metric_preprocess(pd_metrics)
-        return metrics_make_dict(pd_metrics, labels), dict_le
-    else:
-        pd_metrics = pd.read_csv(m_path)
-        #pd_metrics, dict_le = metric_preprocess(pd_metrics)
-        return metrics_make_dict(pd_metrics[metrics], labels), None
-
-def load_knobs(k_path, db_name):
-    if db_name == "redis":
-        return redis_knobs_make_dict(k_path)
-    elif db_name == "rocksdb":
-        return rocksdb_knobs_make_dict(k_path)
-
-def metric_preprocess(metrics):
-    '''To invert for categorical internal metrics'''
-    dict_le = {}
-    c_metrics = metrics.copy()
-
-    for col in metrics.columns:
-        if isinstance(c_metrics[col][0], str):
-            le = LabelEncoder()
-            c_metrics[col] = le.fit_transform(c_metrics[col])
-            dict_le[col] = le
-    return c_metrics, dict_le
-
-def get_ranked_knob_data(ranked_knobs, knob_data, top_k):
-    '''
-        ranked_knobs: sorted knobs with ranking 
-                        ex. ['m3', 'm6', 'm2', ...]
-        knob_data: dictionary data with keys(columnlabels, rowlabels, data)
-        top_k: A standard to split knobs 
-    '''
-    ranked_knob_data = knob_data.copy()
-    ranked_knob_data['columnlabels'] = np.array(ranked_knobs)
-        
-    for i, knob in enumerate(ranked_knobs):
-        ranked_knob_data['data'][:,i] = knob_data['data'][:, list(knob_data['columnlabels']).index(knob)]
-    
-    # pruning with top_k
-    ranked_knob_data['data'] = ranked_knob_data['data'][:,:top_k]
-    ranked_knob_data['columnlabels'] = ranked_knob_data['columnlabels'][:top_k]
-
-    #print('pruning data with ranking')
-    #print('Pruned Ranked knobs: ', ranked_knob_data['columnlabels'])
-
-    return ranked_knob_data
 
 def convert_dict_to_conf(rec_config, persistence):
     f = open('../data/redis_data/init_config.conf', 'r')
@@ -537,3 +369,157 @@ def process_training_data(target_knob, target_metric, db_type, data_type):
             X_max[i] = col_max
 
     return X_columnlabels, X_scaler, X_scaled, y_scaled, X_max, X_min, dummy_encoder
+
+
+
+# Distance
+def extract_statistical_value(wk_internal_metrics):
+    wk_stats_list = []
+    drop_columns = ['count', 'min', 'max']
+
+    for wk_internal_metric in wk_internal_metrics:
+        wk_stats = wk_internal_metric.describe().T.drop(columns=drop_columns)
+        wk_stats_list.append(wk_stats)
+    return 
+
+
+def get_rep(sampleSize, internal_metrics):
+
+    df = []
+    raw_df = []
+    drop_columns = ['count', 'min', 'max']
+
+    df_im = internal_metrics
+
+    for i in range(16):
+            df_im = internal_metrics.sample(sampleSize)
+            # df_im = df_im.drop(columns=['index'])
+            raw_df.append(df_im)
+            df_im = df_im.describe().T.drop(columns=drop_columns)
+            df.append(df_im.T)
+            
+    return df
+
+def get_idx(df):
+    return df[0].columns
+
+def get_cov(target, df, df_idx):
+        
+    df_cov = {}
+
+    for col in df[target].columns:
+        im = []
+        for l in range(len(df)):
+            im.append(df[l][[col]].T)
+        im = pd.concat(im)
+        im_cov = im.cov()
+        df_cov[col] = im_cov
+        
+    return df_cov
+
+def get_mah(train, tar, df_cov, df_idx):
+    mah_dis = {}
+    sum_d = 0
+    for i, idx in enumerate(df_idx):
+        if np.linalg.det(df_cov[df_idx[i]]) != 0:
+            d = distance.mahalanobis(u=train[idx], v=tar[idx], VI=np.linalg.pinv(df_cov[idx]))
+            mah_dis[idx] = d
+            sum_d += d
+    return mah_dis, sum_d
+
+def get_dist(df, df_idx, df_cov, target):
+
+    d_list = dict()
+
+    for wn in range(16):
+        
+        if (wn != target):
+
+            _, s_d = get_mah(df[wn], df[target], df_cov, df_idx)
+
+            d_list[wn]=s_d
+    
+    return d_list
+
+def get_score(df, df_idx, df_cov, target):
+
+    d_list = get_dist(df, df_idx, df_cov, target)
+
+    score_list = dict()
+
+    d_sum = sum(d_list.values())
+    
+    M = max(d_list.values())
+
+    for k, v in d_list.items():
+        score = M - v
+        score_list[k] = score
+    
+    s_sum = sum(score_list.values())
+    
+    for k, v in score_list.items():
+        score = v/s_sum
+        
+        score_list[k] = score
+    
+    return score_list
+
+def test(target, sampleSize, internal_metrics, external_metrics):
+    
+    df = get_rep(sampleSize, internal_metrics)
+    print("Get df")
+    
+    df_idx = get_idx(df)
+    print("Get df_idx")
+    
+    df_cov = get_cov(target, df, df_idx)
+    print("Get df_cov")
+    
+    
+    score = sorted(get_score(df, df_idx, df_cov, target).items(), key=itemgetter(1), reverse=True)
+
+    new_workload = pd.DataFrame() 
+
+    for k, v in score:
+        df_ex = external_metrics.sort_values(by=['WAF'], axis=0, ascending=True)
+
+        target = int(20000*v)+1
+        start = 0
+        end = target
+
+        while target > 0:
+
+            t_workload = df_ex[start : end]
+            t_workload["WL"] = k
+            start = end
+
+            totalNum = len(new_workload)
+            new_workload = pd.concat([new_workload, t_workload])
+
+            preDrop = len(new_workload)
+
+            # new_workload = new_workload.drop_duplicates(['index'])
+
+            postDrop = len(new_workload)
+
+            dropCol = preDrop - postDrop
+            addCol = postDrop - totalNum
+
+            target = target - addCol
+            end = end + target
+
+            if( len(new_workload) >= 20000):
+                break
+
+            # 1. 전체에 target 만큼 추가
+            # 2. 중복을 제거
+            # 3. 제거된 숫자 count
+            # 4. target에 제거된 숫자를 뺌
+            # 5. target workload의 추가 이후부터 다시 1번
+
+        if( len(new_workload) >= 20000):
+            break
+
+    new_workload = new_workload[:20000].sort_index()
+    
+    return new_workload
