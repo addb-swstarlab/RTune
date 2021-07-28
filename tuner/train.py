@@ -17,25 +17,32 @@ sys.path.append('../')
 from models.steps import (run_workload_characterization, run_knob_identification, configuration_recommendation, get_ranked_knob_data, generation_combined_workload)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--tencent', action='store_true', help='Use Tencent Server')
 # parser.add_argument('--params', type=str, default='', help='Load existing parameters')
 # parser.add_argument('--target', type=int, default= 1, help='Workload type')    
 parser.add_argument('--persistence', type=str, choices=["RDB","AOF"], default='RDB', help='Choose Persistant Methods')
 parser.add_argument("--db",type=str, choices=["redis","rocksdb"], default='rocksdb', help="DB type")
-parser.add_argument("--exmetric", type=str, choices=["TIME", "RATE", "WAF", "SA"], default='WAF', help='Choose External Metrics')
+parser.add_argument("--exmetric", type=str, choices=["TIME", "RATE", "WAF", "SA", "SCORE"], default='RATE', help='Choose External Metrics')
 parser.add_argument("--rki",type=str, default='lasso', help = "knob_identification mode")
 parser.add_argument("--gp", type=str, default="numpy")
 parser.add_argument("--target", type=int, default=0, help="Choose which workload will be tagrget dataset")
 parser.add_argument("--targetsize", type=int, default=20, help="Define the number of target workload data")
-parser.add_argument("--topk", type=int, default=-1, help="Define k to prune knob ranking data")
+# related run_knob_identification
+parser.add_argument("--topk", type=int, default=-1, help="Define k to prune knob ranking data") 
+# related run_workload_characterization
+parser.add_argument("--isskip", type=bool, default=True, help="Skip the workload characterization or not") 
 parser.add_argument("--cluster", type=int, default=10, help="limit the number of cluster")
+# related generation_combined_workload
+parser.add_argument("--iscombined", type=bool, default=True, help="Combine the workloads or not") 
 # related dense layer batch_size=64, epochs=300, lr=0.0001
+parser.add_argument("--mode", type=str, default='dense', choices=['dense', 'multi'], help="Define which mode will use fitness function for GA in recommendation step")
+parser.add_argument("--balance", type=list, default=[0.25, 0.25, 0.25, 0.25], help="Define balance number to calculate score")
 parser.add_argument("--batch_size", type=int, default=64, help="Define batch size to train model")
 parser.add_argument("--epochs", type=int, default=300, help="Define epochs to train model")
-parser.add_argument("--lr", type=int, default=0.0001, help="Define learning rate to train model")
-parser.add_argument("--pool", type=int, default=256, help="Define the number of pool to GA algorithm")
-parser.add_argument("--generation", type=int, default=10000, help="Define the number of generation to GA algorithm")
-parser.add_argument("--isskip", type=bool, default=True, help="Skip the workload characterization or not")
+parser.add_argument("--lr", type=int, default=0.0002, help="Define learning rate to train model")
+parser.add_argument("--pool", type=int, default=128, help="Define the number of pool to GA algorithm")
+parser.add_argument("--generation", type=int, default=1000, help="Define the number of generation to GA algorithm")
+
+
 
 
 opt = parser.parse_args()
@@ -73,7 +80,7 @@ def main():
     wk_internal_metrics_path = os.path.join(DATA_PATH, 'results', 'internal')
     wk_external_metrics_path = os.path.join(DATA_PATH, 'results', 'external')
     
-    logger.info("Target workload name is {}".format(opt.target))
+    logger.info("Target workload name is {}, target external metric is {}".format(opt.target, opt.exmetric))
 
     knobs_path = os.path.join(DATA_PATH, "configs")
 
@@ -111,8 +118,10 @@ def main():
     for wk in range(len(os.listdir(wk_external_metrics_path))):
         wk_external_metric, _ = load_metrics(m_path = os.path.join(wk_external_metrics_path, "external_results_"+str(wk)+".csv"),
                                                 labels = knob_data['rowlabels'],
-                                                metrics = [opt.exmetric],
-                                                mode = 'external')
+                                                metrics = opt.exmetric,
+                                                mode = 'external',
+                                                target_wk = opt.target,
+                                                b = opt.balance)
         wk_external_metrics_data.append(wk_external_metric)                                                
     logger.info("Fin Load external_metrics_data")
     
@@ -133,8 +142,8 @@ def main():
     train_internal_data['data'] = np.array(train_internal_data['data'])
     train_external_data['data'] = np.array(train_external_data['data'])
 
-    test_internal_data = wk_internal_metrics_data[opt.target]
-    test_external_data = wk_external_metrics_data[opt.target]
+    # test_internal_data = wk_internal_metrics_data[opt.target]
+    # test_external_data = wk_external_metrics_data[opt.target]
     
     ### METRICS SIMPLIFICATION STAGE ###
     """
@@ -183,7 +192,7 @@ def main():
     ## TODO: get Mahalanobis distance with statistic of each workload
     ##       pruning workload data using previous step's results
     logger.info("\n\n====================== generation_combined_workload ====================")
-    combined_wk_external_metrics_data = generation_combined_workload(wk_pruned_internal_metrics_data, wk_external_metrics_data, opt.target, opt.targetsize, logger)
+    combined_wk_external_metrics_data = generation_combined_workload(wk_pruned_internal_metrics_data, wk_external_metrics_data, opt.target, opt.targetsize, logger, opt.exmetric, opt.iscombined)
     # print(combined_wk_external_metrics_data)
     
     ## Save Combined Workload csv file
@@ -204,8 +213,9 @@ def main():
     ## TODO: genetic algorithm ...
     ## train dense layer model with combined worklaod ##
     logger.info("\n\n====================== train_combined_workload ====================")
-    configuration_recommendation(knob_data, combined_wk_external_metrics_data, logger, batch_size=opt.batch_size, 
-                            epochs=opt.epochs, lr=opt.lr, n_pool=opt.pool, n_generation=opt.generation)
+    configuration_recommendation(knob_data, combined_wk_external_metrics_data, logger, mode=opt.mode,
+                                 batch_size=opt.batch_size, epochs=opt.epochs, lr=opt.lr, n_pool=opt.pool, 
+                                 n_generation=opt.generation, b=opt.balance)
 
     # top_ks = range(4,13)
     # best_recommend = -float('inf')

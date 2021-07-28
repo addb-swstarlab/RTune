@@ -1,24 +1,24 @@
 [rocksdb]
 max_background_compactions = 16
-max_background_flushes = 7
-write_buffer_size = 2094080
+max_background_flushes = 4
+write_buffer_size = 2068480
 max_write_buffer_number = 8
 min_write_buffer_number_to_merge = 2
 compaction_pri = 3
 compaction_style = 0
-level0_file_num_compaction_trigger = 8
-level0_slowdown_writes_trigger = 32
-level0_stop_writes_trigger = 64
-compression_type = none
+level0_file_num_compaction_trigger = 2
+level0_slowdown_writes_trigger = 16
+level0_stop_writes_trigger = 34
+compression_type = zlib
 bloom_locality = 1
-open_files = 1000000
+open_files = -1
 block_size = 16384
-cache_index_and_filter_blocks = 1
-max_bytes_for_level_base = 8388608
-max_bytes_for_level_multiplier = 11
-target_file_size_base = 555008
+cache_index_and_filter_blocks = 0
+max_bytes_for_level_base = 2097152
+max_bytes_for_level_multiplier = 8
+target_file_size_base = 2018304
 target_file_size_multiplier = 1
 num_levels = 5
-memtable_bloom_size_ratio = 0.0
-compression_ratio = 0.99
+memtable_bloom_size_ratio = 0.05
+compression_ratio = 0.0
 

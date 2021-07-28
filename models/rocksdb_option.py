@@ -119,6 +119,8 @@ def make_random_option():
     compaction_style = ""
     write_buffer_number = -1
 
+    compression_type = 0
+
     # option
     for k, v in option.items():
 
@@ -138,6 +140,8 @@ def make_random_option():
             compaction_style = "kCompactionStyleLevel"
             value = v[compaction_style]
             opt = f"-{k}={value} "
+        elif k == "compression_type" and v == "none":
+            compression_type = 1 # to make compression ratio be 1
         else:
             value = random.choice(v)
             opt = f"-{k}={value} "
@@ -165,7 +169,10 @@ def make_random_option():
 
     # plus_option
     for k, v in plus_option.items():
-        value = random.choice(v)
+        if k == "compression_ratio" and compression_type:
+            value = 1
+        else:
+            value = random.choice(v)
         opt = f"-{k}={value} "
         option_list += opt
         option_dict[k] = value

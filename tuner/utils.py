@@ -15,10 +15,13 @@ from scipy.spatial import distance
 def get_filename(PATH, head, tail):
     i = 0
     today = datetime.datetime.now()
-    name = head+'-'+today.strftime('%Y%m%d')+'-'+'%02d'%i+tail
+    today = today.strftime('%Y%m%d')
+    if not os.path.exists(os.path.join(PATH, today)):
+        os.mkdir(os.path.join(PATH, today))
+    name = today+'/'+head+'-'+today+'-'+'%02d'%i+tail
     while os.path.exists(os.path.join(PATH, name)):
         i += 1
-        name = head+'-'+today.strftime('%Y%m%d')+'-'+'%02d'%i+tail
+        name = today+'/'+head+'-'+today+'-'+'%02d'%i+tail
     return name
 
 def get_logger(log_path='./logs'):

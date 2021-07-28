@@ -178,3 +178,12 @@ Dockerfile
 .idea
 
 *.pyc
+
+/tuner/eval-logs/
+/tuner/logs/
+/tuner/model_save/
+/tuner/save_knobs/
+/tuner/final_solutions/
+/tuner/combined_wk/
+/tuner/*.csv
+/tuner/*.json

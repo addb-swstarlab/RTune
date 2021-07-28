@@ -16,7 +16,7 @@ from models.util import DataUtil
 from models.rf import RFR
 from models.gp import GPRNP
 from models.parameters import *
-from models.denseGA import RocksDBDataset, Net, train, valid, fitness_function
+from models.denseGA import RocksDBDataset, SingleNet, MultiNet, train, valid, fitness_function
 import models.rocksdb_option as option
 sys.path.append('../')
 from tuner.utils import *
@@ -324,7 +324,7 @@ from scipy.spatial import distance
 def numpy_to_df(numpy_):
     return pd.DataFrame(numpy_)
 
-def generation_combined_workload(wk_internal_metrics, wk_external_metrics, target_wk, target_size, logger):
+def generation_combined_workload(wk_internal_metrics, wk_external_metrics, target_wk, target_size, logger, target_ex, iscombined):
     '''
         wk_internal_metrics
         target_wk : target workload number
@@ -402,9 +402,12 @@ def generation_combined_workload(wk_internal_metrics, wk_external_metrics, targe
     #     combined_wk = pd.concat([combined_wk,sorted_df_external_metric[:wk_sample_size]])
     
     for _, (wk, score) in enumerate(wk_sorted_score):
+        if iscombined is False:
+            return wk_df_external_metrics[wk]
+            
         wk_sample_size = round(score * sample_size)
         # Sorting external metrics by workload
-        sorted_df_external_metric = wk_df_external_metrics[wk].sort_values(by=['WAF'])
+        sorted_df_external_metric = wk_df_external_metrics[wk].sort_values(by=[target_ex])
         # Remove duplicated index
         sorted_df_external_metric = sorted_df_external_metric.drop(combined_wk.index)
         logger.info(f"{wk}th workload remained data size {len(sorted_df_external_metric)}, get data size {wk_sample_size}")
@@ -426,12 +429,12 @@ def generation_combined_workload(wk_internal_metrics, wk_external_metrics, targe
     #     combined_wk = pd.concat([combined_wk,sorted_df_external_metric[:wk_sample_size]])
     return combined_wk.sort_index()
 
-def configuration_recommendation(knob_data, combined_wk, logger, batch_size=64, epochs=300, lr=0.0001, n_pool=32, n_generation=10000):
+def configuration_recommendation(knob_data, combined_wk, logger, mode='dense', batch_size=64, epochs=300, lr=0.0001, n_pool=32, n_generation=10000, b=None):
     configs = knob_data['data']
     X_tr, X_te, y_tr, y_te = train_test_split(configs, np.array(combined_wk), test_size=0.2, random_state=42, shuffle=True)
     logger.info(f"X_train : {X_tr.shape} X_test : {X_te.shape} Y_train : {y_tr.shape} Y_test : {y_te.shape}")
     
-    scaler_X = MinMaxScaler().fit(X_tr)
+    scaler_X = MinMaxScaler().fit(X_tr) # range: 0~1
     scaler_y = StandardScaler().fit(y_tr)
 
     X_norm_tr = scaler_X.transform(X_tr).astype(np.float32)
@@ -439,16 +442,22 @@ def configuration_recommendation(knob_data, combined_wk, logger, batch_size=64, 
     y_norm_tr = scaler_y.transform(y_tr).astype(np.float32)
     y_norm_te = scaler_y.transform(y_te).astype(np.float32)
 
+    
     Dataset_tr = RocksDBDataset(X_norm_tr, y_norm_tr)
     Dataset_te = RocksDBDataset(X_norm_te, y_norm_te)
 
     loader_tr = DataLoader(dataset = Dataset_tr, batch_size = batch_size, shuffle=True)
     loader_te = DataLoader(dataset = Dataset_te, batch_size = batch_size, shuffle=True)
-
-    model = Net().to(device)
+    
+    if mode == "dense":
+        model = SingleNet().to(device)
+    elif mode == "multi":
+        model = MultiNet(de_time=20.7, de_rate=5.02, de_waf=10.9, de_sa=56.84, b=b).to(device)
 
     losses_tr = []
     losses_te = []
+    best_loss = 100
+    name = get_filename('model_save', 'model', '.pt')
     for epoch in range(epochs):
         loss_tr = train(model, loader_tr, lr)
         loss_te = valid(model, loader_te)
@@ -456,13 +465,16 @@ def configuration_recommendation(knob_data, combined_wk, logger, batch_size=64, 
         losses_tr.append(loss_tr)
         losses_te.append(loss_te)
         
+        if best_loss > loss_te:
+            best_loss = loss_te
+            torch.save(model, os.path.join('model_save', name))
         if epoch % 10 == 0:
             logger.info(f"[{epoch:02d}/{epochs}] loss_tr: {loss_tr:.4f}\tloss_te:{loss_te:.4f}")
     logger.info(f"[{epoch:02d}/{epochs}] loss_tr: {loss_tr:.4f}\tloss_te:{loss_te:.4f}")
-
-    name = get_filename('model_save', 'model', '.pt')
-    torch.save(model, os.path.join('model_save', name))
-    logger.info(f"save model to {os.path.join('model_save', name)}")
+    # torch.save(model, os.path.join('model_save', name))
+    logger.info(f"loss is {best_loss:.4f}, save model to {os.path.join('model_save', name)}")
+    best_model = torch.load(os.path.join('model_save', name))
+    best_model.eval()
 
     ## GA Algorithm
     n_configs = configs.shape[1] # get number of 22
@@ -475,8 +487,9 @@ def configuration_recommendation(knob_data, combined_wk, logger, batch_size=64, 
         ## data scaling
         scaled_pool = scaler_X.transform(current_solution_pool)
         ## fitenss calculation with real values (not scaled)
-        scaled = fitness_function(scaled_pool, model)
+        scaled = fitness_function(scaled_pool, best_model)
         fitness = scaler_y.inverse_transform(scaled)
+        fitness = -fitness
         ## best parents selection
         idx_fitness = np.argsort(fitness)[:n_pool_half] # minimum
         best_solution_pool = current_solution_pool[idx_fitness,:]

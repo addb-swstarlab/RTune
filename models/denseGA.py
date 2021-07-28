@@ -4,6 +4,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torch
 import numpy as np
+import copy
 
 class RocksDBDataset(Dataset):
     def __init__(self, X, y):
@@ -17,9 +18,9 @@ class RocksDBDataset(Dataset):
     def __getitem__(self, idx):
         return (self.X[idx], self.y[idx])
 
-class Net(nn.Module):
+class SingleNet(nn.Module):
     def __init__(self):
-        super(Net, self).__init__()
+        super(SingleNet, self).__init__()
 #         self.fc1 = nn.Sequential(nn.Linear(22, 16), nn.ReLU(16))
         self.fc1 = nn.Sequential(nn.Linear(22, 64), nn.ReLU())
         self.fc2 = nn.Sequential(nn.Linear(64, 16), nn.ReLU())
@@ -31,6 +32,39 @@ class Net(nn.Module):
         h2 = self.fc2(h1)
         h3 = self.fc3(h2)
         return h3
+
+def clones(module, N):
+    return nn.ModuleList([copy.deepcopy(module) for _ in range(N)])
+
+
+class MultiNet(nn.Module):
+    def __init__(self, de_time, de_rate, de_waf, de_sa, b):
+        super(MultiNet, self).__init__()
+        self.de_ex = np.array([de_time, de_rate, de_waf, de_sa])
+        self.de_time = de_time
+        self.de_rate = de_rate
+        self.de_waf = de_waf
+        self.de_sa = de_sa
+        self.b = np.array(b) # list of balance values for calculating score [a, b, c, d]
+        self.fc1 = nn.Sequential(nn.Linear(22, 64), nn.ReLU())
+        self.fc2 = nn.Sequential(nn.Linear(64, 16), nn.ReLU())
+        self.fc_ex = clones(nn.Sequential(nn.Linear(16,1)), 4)
+    
+    def get_score(self, h_ex):
+        self.score_ex = [self.de_ex[0]/h_ex[0], h_ex[1]/self.de_ex[1], self.de_ex[2]/h_ex[2], self.de_ex[3]/h_ex[3]]
+        return sum(_*self.b[i] for i, _ in enumerate(self.score_ex))
+
+    def forward(self, x):
+        x = x.float()
+        h1 = self.fc1(x)
+        h2 = self.fc2(h1)
+        self.time = self.fc_ex[0](h2)
+        self.rate = self.fc_ex[1](h2)
+        self.waf = self.fc_ex[2](h2)
+        self.sa = self.fc_ex[3](h2)
+        self.score = self.get_score([self.time, self.rate, self.waf, self.sa])
+        return self.score
+
 
 def train(model, train_loader, lr):
     ## Construct optimizer

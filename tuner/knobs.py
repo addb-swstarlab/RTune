@@ -128,13 +128,18 @@ def rocksdb_knobs_make_dict(knobs_path):
         f = open(knob_path, 'r')
         config_file = f.readlines()
         knobs_list = config_file[1:-1]
-
+        cmp_type = 0
+        
         for l in knobs_list:
             col, _, d = l.split()
             if d in compression_type:
+                if d == "none":
+                    cmp_type = 1
                 d = compression_type.index(d)
             elif d in cache_index_and_filter_blocks:
                 d = cache_index_and_filter_blocks.index(d)
+            if col == "compression_ratio" and cmp_type:
+                d = 1
             config_datas.append(d)
             config_columns.append(col)
 

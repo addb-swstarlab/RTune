@@ -2,15 +2,24 @@ from sklearn.preprocessing import LabelEncoder
 import pandas as pd
 import numpy as np
 
-def load_metrics(m_path = ' ', labels = [], metrics=None, mode = ' '):
+def load_metrics(m_path = ' ', labels = [], metrics=None, mode = ' ', target_wk = None, b = None):
     if mode == "internal":
         pd_metrics = pd.read_csv(m_path)
         pd_metrics, dict_le = metric_preprocess(pd_metrics)
         return metrics_make_dict(pd_metrics, labels), dict_le
     else:
-        pd_metrics = pd.read_csv(m_path)
+        pd_metrics = pd.read_csv(m_path, index_col=0)
         #pd_metrics, dict_le = metric_preprocess(pd_metrics)
-        return metrics_make_dict(pd_metrics[metrics], labels), None
+        if metrics == "SCORE":
+            default_ex = [[19.5, 5.32, 10.6, 56.84], [53.6, 9.7, 9.5, 235.04], [104.9, 8.92, 10.4, 354.46], [131.6, 7.9, 11.3, 377.66], [8.1, 12.68, 8, 55.21],
+                          [47.3, 10.88, 9.9, 228.18], [111, 8.34, 11.3, 344.46], [136.2, 7.55, 11.4, 366.74], [5, 20.51, 6.3, 53.94], [39.7, 12.92, 9.6, 222.84],
+                          [123.6, 7.46, 11.8, 336.52], [133.9, 7.65, 12.2, 358.47], [4.5, 22.45, 6.2, 53.63], [31.5, 16.23, 8.2, 221.71], [99.3, 9.29, 10.5, 334.9], 
+                          [112.6, 9.09, 10.7, 356.85]]
+            default_ex_wk = default_ex[target_wk]
+            pd_metrics[metrics] = default_ex_wk[0]/pd_metrics['TIME']*b[0]+pd_metrics['RATE']/default_ex_wk[1]*b[1] \
+                                    +default_ex_wk[2]/pd_metrics['WAF']*b[2]+default_ex_wk[3]/pd_metrics['SA']*b[3]
+            # return metrics_make_dict(pd_metrics, labels), None 
+        return metrics_make_dict(pd_metrics[[metrics]], labels), None
 
 def metric_preprocess(metrics):
     '''To invert for categorical internal metrics'''
