@@ -24,8 +24,9 @@ parser.add_argument("--db",type=str, choices=["redis","rocksdb"], default='rocks
 parser.add_argument("--exmetric", type=str, choices=["TIME", "RATE", "WAF", "SA", "SCORE"], default='RATE', help='Choose External Metrics')
 parser.add_argument("--rki",type=str, default='lasso', help = "knob_identification mode")
 parser.add_argument("--gp", type=str, default="numpy")
-parser.add_argument("--target", type=int, default=0, help="Choose which workload will be tagrget dataset")
+parser.add_argument("--target", type=int, default=16, help="Choose which workload will be tagrget dataset, 0~15 are pre-gained worklaods, 16~ is a new target workload in folder")
 parser.add_argument("--targetsize", type=int, default=20, help="Define the number of target workload data")
+parser.add_argument("--targetresultpath", type=str, default='target_workload/min_time_conf_result', help="Define the target workload path")
 # related run_knob_identification
 parser.add_argument("--topk", type=int, default=-1, help="Define k to prune knob ranking data") 
 # related run_workload_characterization
@@ -192,7 +193,10 @@ def main():
     ## TODO: get Mahalanobis distance with statistic of each workload
     ##       pruning workload data using previous step's results
     logger.info("\n\n====================== generation_combined_workload ====================")
-    combined_wk_external_metrics_data = generation_combined_workload(wk_pruned_internal_metrics_data, wk_external_metrics_data, opt.target, opt.targetsize, logger, opt.exmetric, opt.iscombined)
+    combined_wk_external_metrics_data = generation_combined_workload(wk_pruned_internal_metrics_data, wk_external_metrics_data, opt.target, 
+                                                                     opt.targetsize, logger, opt.exmetric, opt.iscombined,
+                                                                     opt.targetresultpath)
+                                                                    
     # print(combined_wk_external_metrics_data)
     
     ## Save Combined Workload csv file

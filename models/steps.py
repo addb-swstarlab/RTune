@@ -324,20 +324,24 @@ from scipy.spatial import distance
 def numpy_to_df(numpy_):
     return pd.DataFrame(numpy_)
 
-def generation_combined_workload(wk_internal_metrics, wk_external_metrics, target_wk, target_size, logger, target_ex, iscombined):
+def generation_combined_workload(wk_internal_metrics, wk_external_metrics, target_wk, target_size, logger, target_ex, iscombined, target_result_path):
     '''
         wk_internal_metrics
         target_wk : target workload number
-        target_size : target workload data size
+        target_size : # target workload data
     '''
     ## Extract statistical values
     wk_stats_list = []
     drop_columns = ['count', 'min', 'max']
 
+    ### TODO: change applying df_wk_internal_metric of target 340 line, must be dataframe type
     for i, wk_internal_metric in enumerate(wk_internal_metrics):
         df_wk_internal_metric = numpy_to_df(wk_internal_metric['data'])
         if i == target_wk:
-            df_wk_internal_metric = df_wk_internal_metric.sample(target_size)
+            if target_wk < 16:
+                df_wk_internal_metric = df_wk_internal_metric.sample(target_size)
+            elif target_wk > 15:
+                df_wk_internal_metric = pd.read_csv(os.path.join(target_result_path, target_wk, 'external_results_11.csv'), index_col=0)
         wk_stats = df_wk_internal_metric.describe().T.drop(columns=drop_columns)
         wk_stats_list.append(wk_stats.T)
 

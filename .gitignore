@@ -185,5 +185,7 @@ Dockerfile
 /tuner/save_knobs/
 /tuner/final_solutions/
 /tuner/combined_wk/
+/tuner/target_workload/
 /tuner/*.csv
 /tuner/*.json
+/tuner/*.ipynb
