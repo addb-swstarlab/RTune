@@ -26,12 +26,11 @@ parser.add_argument("--rki",type=str, default='lasso', help = "knob_identificati
 parser.add_argument("--gp", type=str, default="numpy")
 parser.add_argument("--target", type=int, default=16, help="Choose which workload will be tagrget dataset, 0~15 are pre-gained worklaods, 16~ is a new target workload in folder")
 parser.add_argument("--targetsize", type=int, default=20, help="Define the number of target workload data")
-parser.add_argument("--targetresultpath", type=str, default='target_workload/min_time_conf_result', help="Define the target workload path")
 # related run_knob_identification
 parser.add_argument("--topk", type=int, default=-1, help="Define k to prune knob ranking data") 
 # related run_workload_characterization
 parser.add_argument("--isskip", type=bool, default=True, help="Skip the workload characterization or not") 
-parser.add_argument("--cluster", type=int, default=10, help="limit the number of cluster")
+parser.add_argument("--cluster", type=int, default=50, help="limit the number of cluster")
 # related generation_combined_workload
 parser.add_argument("--iscombined", type=bool, default=True, help="Combine the workloads or not") 
 # related dense layer batch_size=64, epochs=300, lr=0.0001
@@ -123,18 +122,33 @@ def main():
                                                 mode = 'external',
                                                 target_wk = opt.target,
                                                 b = opt.balance)
-        wk_external_metrics_data.append(wk_external_metric)                                                
+        wk_external_metrics_data.append(wk_external_metric)
+    
+    if opt.target > 15:
+        wk_internal_metric, _ = load_metrics(m_path = f'target_workload/min_time_conf_result/{opt.target}/internal_results_11.csv',
+                                             labels = np.array(range(1,21)),
+                                             mode = 'internal')
+        wk_internal_metrics_data.append(wk_internal_metric)
+        
+        wk_external_metric, _ = load_metrics(m_path = f'target_workload/min_time_conf_result/{opt.target}/external_results_11.csv',
+                                             labels = np.array(range(1,21)),
+                                             metrics = opt.exmetric,
+                                             mode = 'external',
+                                             target_wk = opt.target,
+                                             b = opt.balance)
+        wk_external_metrics_data.append(wk_external_metric)
+
     logger.info("Fin Load external_metrics_data")
     
     ### SPLIT DATA TO TRAIN AND TEST ###
     train_internal_data = {'columnlabels':wk_internal_metrics_data[0]['columnlabels'],
-                            'rowlabels':[i for i in range(1,300001)],
+                            'rowlabels':[i for i in range(1,320001)],
                             'data':[]}
 
     train_external_data = {'columnlabels':wk_external_metrics_data[0]['columnlabels'],
-                            'rowlabels':[i for i in range(1,300001)],
+                            'rowlabels':[i for i in range(1,320001)],
                             'data':[]}                      
-
+    
     for wk in range(len(wk_internal_metrics_data)):
         if wk != opt.target:
             train_internal_data['data'].extend(wk_internal_metrics_data[wk]['data'])
@@ -161,10 +175,11 @@ def main():
         'columnlabels' : [train_internal_data['columnlabels'][i] for i in metric_idxs]
     }
     wk_pruned_internal_metrics_data = []
+    
     for wk_int_met in wk_internal_metrics_data:
         wk_int_met['data'] = wk_int_met['data'][:,metric_idxs]
         wk_pruned_internal_metrics_data.append(wk_int_met)    
-
+    
     ### KNOBS RANKING STAGE ###
     rank_knob_data = copy.deepcopy(knob_data)
     logger.info("\n\n====================== run_knob_identification ====================")
@@ -184,8 +199,9 @@ def main():
     
     logger.info("\n\n================ The number of TOP {} knobs ===============".format(top_k))
     if opt.topk != -1:
-        ranked_test_knob_data = get_ranked_knob_data(ranked_knobs, knob_data, top_k)
+        ranked_test_knob_data = get_ranked_knob_data(ranked_knobs, knob_data, top_k)        
         logger.info('Pruned Ranked knobs: {}'.format(ranked_test_knob_data['columnlabels']))
+        knob_data = ranked_test_knob_data
     else:
         logger.info("Skipping pruning ranked knobs")
 
@@ -194,8 +210,7 @@ def main():
     ##       pruning workload data using previous step's results
     logger.info("\n\n====================== generation_combined_workload ====================")
     combined_wk_external_metrics_data = generation_combined_workload(wk_pruned_internal_metrics_data, wk_external_metrics_data, opt.target, 
-                                                                     opt.targetsize, logger, opt.exmetric, opt.iscombined,
-                                                                     opt.targetresultpath)
+                                                                     opt.targetsize, logger, opt.exmetric, opt.iscombined)
                                                                     
     # print(combined_wk_external_metrics_data)
     
