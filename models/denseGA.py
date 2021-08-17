@@ -19,11 +19,13 @@ class RocksDBDataset(Dataset):
         return (self.X[idx], self.y[idx])
 
 class SingleNet(nn.Module):
-    def __init__(self):
+    def __init__(self, input_dim, hidden_dim):
         super(SingleNet, self).__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
 #         self.fc1 = nn.Sequential(nn.Linear(22, 16), nn.ReLU(16))
-        self.fc1 = nn.Sequential(nn.Linear(22, 64), nn.ReLU())
-        self.fc2 = nn.Sequential(nn.Linear(64, 16), nn.ReLU())
+        self.fc1 = nn.Sequential(nn.Linear(self.input_dim, self.hidden_dim), nn.ReLU())
+        self.fc2 = nn.Sequential(nn.Linear(self.hidden_dim, 16), nn.ReLU())
         self.fc3 = nn.Sequential(nn.Linear(16, 1))
 
     def forward(self, x):
@@ -38,16 +40,18 @@ def clones(module, N):
 
 
 class MultiNet(nn.Module):
-    def __init__(self, de_time, de_rate, de_waf, de_sa, b):
+    def __init__(self, input_dim, hidden_dim, de_time, de_rate, de_waf, de_sa, b):
         super(MultiNet, self).__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
         self.de_ex = np.array([de_time, de_rate, de_waf, de_sa])
         self.de_time = de_time
         self.de_rate = de_rate
         self.de_waf = de_waf
         self.de_sa = de_sa
         self.b = np.array(b) # list of balance values for calculating score [a, b, c, d]
-        self.fc1 = nn.Sequential(nn.Linear(22, 64), nn.ReLU())
-        self.fc2 = nn.Sequential(nn.Linear(64, 16), nn.ReLU())
+        self.fc1 = nn.Sequential(nn.Linear(self.input_dim, self.hidden_dim), nn.ReLU())
+        self.fc2 = nn.Sequential(nn.Linear(self.hidden_dim, 16), nn.ReLU())
         self.fc_ex = clones(nn.Sequential(nn.Linear(16,1)), 4)
     
     def get_score(self, h_ex):

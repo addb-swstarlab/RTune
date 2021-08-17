@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import copy
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.gaussian_process import GaussianProcessRegressor
@@ -25,7 +26,7 @@ from tuner.utils import *
 device = torch.device("cpu")
 
 ## Try Scaling 
-def run_workload_characterization(metric_data, cluster_threshold=20, skip=False):
+def run_workload_characterization(metric_data, logger, cluster_threshold=20, skip=False):
     ##TODO: modift after workload generation.
 
     matrix = metric_data['data']
@@ -45,7 +46,7 @@ def run_workload_characterization(metric_data, cluster_threshold=20, skip=False)
             nonconst_columnlabels.append(v)
     assert len(nonconst_matrix) > 0, "Need more data to train the model"
     nonconst_matrix = np.hstack(nonconst_matrix)
-    print("Workload characterization ~ nonconst data size: %s", nonconst_matrix.shape)
+    logger.info("Workload characterization ~ nonconst data size: %s", nonconst_matrix.shape)
 
     # Remove any duplicate columns
     unique_matrix, unique_idxs = np.unique(nonconst_matrix, axis=1, return_index=True)
@@ -55,11 +56,11 @@ def run_workload_characterization(metric_data, cluster_threshold=20, skip=False)
     unique_idxs = unique_idxs
     unique_columnlabels = nonconst_columnlabels
 
-    print("Workload characterization ~ final data size: %s", unique_matrix.shape)
+    logger.info("Workload characterization ~ final data size: %s", unique_matrix.shape)
     n_rows, n_cols = unique_matrix.shape
 
     if skip:
-        print("Skipping pruning Internal Metrics data")
+        logger.info("Skipping pruning Internal Metrics data")
         return nonconst_columnlabels
 
     # Shuffle the matrix rows
@@ -83,7 +84,7 @@ def run_workload_characterization(metric_data, cluster_threshold=20, skip=False)
     gapk = create_kselection_model("gap-statistic")
     gapk.fit(components, kmeans_models.cluster_map_)
 
-    print("Found optimal number of clusters: {}".format(gapk.optimal_num_clusters_))
+    logger.info("Found optimal number of clusters: {}".format(gapk.optimal_num_clusters_))
 
     # Get pruned metrics, cloest samples of each cluster center
     pruned_metrics = kmeans_models.cluster_map_[gapk.optimal_num_clusters_].get_closest_samples()
@@ -94,14 +95,14 @@ def run_workload_characterization(metric_data, cluster_threshold=20, skip=False)
 def run_knob_identification(knob_data,metric_data,mode, logger):
     # TODO: type filter for Redis, RocksDB 
     
-    knob_matrix = knob_data['data']
-    knob_columnlabels = knob_data['columnlabels']
+    knob_matrix = knob_data['data'].copy()
+    knob_columnlabels = knob_data['columnlabels'].copy()
 
     metric_matrix = metric_data['data']
     #metric_columnlabels = metric_data['columnlabels']
 
-    encoded_knob_columnlabels = knob_columnlabels
-    encoded_knob_matrix = knob_matrix
+    encoded_knob_columnlabels = knob_columnlabels.copy()
+    encoded_knob_matrix = knob_matrix.copy()
 
     # standardize values in each column to N(0, 1)
     standardizer = StandardScaler()
@@ -304,12 +305,13 @@ def get_ranked_knob_data(ranked_knobs, knob_data, top_k):
         knob_data: dictionary data with keys(columnlabels, rowlabels, data)
         top_k: A standard to split knobs 
     '''
-    ranked_knob_data = knob_data.copy()
-    ranked_knob_data['columnlabels'] = np.array(ranked_knobs)
-        
+ 
+    ranked_knob_data = copy.deepcopy(knob_data)
+    ranked_knob_data['columnlabels'] = np.array(ranked_knobs).copy()
+    
     for i, knob in enumerate(ranked_knobs):
         ranked_knob_data['data'][:,i] = knob_data['data'][:, list(knob_data['columnlabels']).index(knob)]
-    
+
     # pruning with top_k
     ranked_knob_data['data'] = ranked_knob_data['data'][:,:top_k]
     ranked_knob_data['columnlabels'] = ranked_knob_data['columnlabels'][:top_k]
@@ -324,7 +326,7 @@ from scipy.spatial import distance
 def numpy_to_df(numpy_):
     return pd.DataFrame(numpy_)
 
-def generation_combined_workload(wk_internal_metrics, wk_external_metrics, target_wk, target_size, logger, target_ex, iscombined, target_result_path):
+def generation_combined_workload(wk_internal_metrics, wk_external_metrics, target_wk, target_size, logger, target_ex, iscombined):
     '''
         wk_internal_metrics
         target_wk : target workload number
@@ -340,8 +342,10 @@ def generation_combined_workload(wk_internal_metrics, wk_external_metrics, targe
         if i == target_wk:
             if target_wk < 16:
                 df_wk_internal_metric = df_wk_internal_metric.sample(target_size)
-            elif target_wk > 15:
-                df_wk_internal_metric = pd.read_csv(os.path.join(target_result_path, target_wk, 'external_results_11.csv'), index_col=0)
+            
+        if target_wk > 15:
+            target_wk = 16
+            #     df_wk_internal_metric = pd.read_csv(os.path.join(target_result_path, target_wk, 'external_results_11.csv'), index_col=0)
         wk_stats = df_wk_internal_metric.describe().T.drop(columns=drop_columns)
         wk_stats_list.append(wk_stats.T)
 
@@ -351,6 +355,7 @@ def generation_combined_workload(wk_internal_metrics, wk_external_metrics, targe
     ## Get Mahalanobis distance list
     int_idx = wk_stats_list[0].columns
     wk_mah_dis = {}
+
     for wk, wk_stats in enumerate(wk_stats_list):
         sum_d = 0
         for idx in int_idx:
@@ -435,6 +440,7 @@ def generation_combined_workload(wk_internal_metrics, wk_external_metrics, targe
 
 def configuration_recommendation(knob_data, combined_wk, logger, mode='dense', batch_size=64, epochs=300, lr=0.0001, n_pool=32, n_generation=10000, b=None):
     configs = knob_data['data']
+
     X_tr, X_te, y_tr, y_te = train_test_split(configs, np.array(combined_wk), test_size=0.2, random_state=42, shuffle=True)
     logger.info(f"X_train : {X_tr.shape} X_test : {X_te.shape} Y_train : {y_tr.shape} Y_test : {y_te.shape}")
     
@@ -454,9 +460,9 @@ def configuration_recommendation(knob_data, combined_wk, logger, mode='dense', b
     loader_te = DataLoader(dataset = Dataset_te, batch_size = batch_size, shuffle=True)
     
     if mode == "dense":
-        model = SingleNet().to(device)
+        model = SingleNet(input_dim=configs.shape[1], hidden_dim=64).to(device)
     elif mode == "multi":
-        model = MultiNet(de_time=20.7, de_rate=5.02, de_waf=10.9, de_sa=56.84, b=b).to(device)
+        model = MultiNet(input_dim=configs.shape[1], hidden_dim=64, de_time=20.7, de_rate=5.02, de_waf=10.9, de_sa=56.84, b=b).to(device)
 
     losses_tr = []
     losses_te = []
@@ -480,8 +486,9 @@ def configuration_recommendation(knob_data, combined_wk, logger, mode='dense', b
     best_model = torch.load(os.path.join('model_save', name))
     best_model.eval()
 
-    ## GA Algorithm
-    n_configs = configs.shape[1] # get number of 22
+    
+    ## GA Algorithm ##
+    n_configs = configs.shape[1] # get number of 22, if pruned then topk number (5, 10, ...)
     n_pool_half = int(n_pool/2) # hafl of a pool size
     mutation = int(n_configs * 0.4) # mutate percentage
 
@@ -507,6 +514,7 @@ def configuration_recommendation(knob_data, combined_wk, logger, mode='dense', b
             new_solution_pool[j][pivot:] = best_solution_pool[n_pool_half-1-j][pivot:]
             
             _, random_knobs = option.make_random_option()
+            random_knobs = {_:random_knobs[_] for _ in knob_data['columnlabels']}
             knobs = list(random_knobs.values())
             random_knob_index = np.arange(n_configs)
             np.random.shuffle(random_knob_index)
