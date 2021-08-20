@@ -20,7 +20,7 @@ def load_metrics(m_path = ' ', labels = [], metrics=None, mode = ' ', target_wk 
                 default_ex_wk = default_ex[target_wk]
             ## using new target workloads
             elif target_wk > 15:
-                default_ex = pd.read_csv('target_worklaod/default_performance.csv', index_col=0)
+                default_ex = pd.read_csv('target_workload/default_performance/default_performance.csv', index_col=0)
                 default_ex_wk = list(default_ex.loc[target_wk].values)
             
             pd_metrics[metrics] = default_ex_wk[0]/pd_metrics['TIME']*b[0]+pd_metrics['RATE']/default_ex_wk[1]*b[1] \

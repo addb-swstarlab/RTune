@@ -35,14 +35,13 @@ parser.add_argument("--cluster", type=int, default=50, help="limit the number of
 parser.add_argument("--iscombined", type=bool, default=True, help="Combine the workloads or not") 
 # related dense layer batch_size=64, epochs=300, lr=0.0001
 parser.add_argument("--mode", type=str, default='dense', choices=['dense', 'multi'], help="Define which mode will use fitness function for GA in recommendation step")
-parser.add_argument("--balance", type=list, default=[0.25, 0.25, 0.25, 0.25], help="Define balance number to calculate score")
+# parser.add_argument("--balance", type=list, default=[0.25, 0.25, 0.25, 0.25], help="Define balance number to calculate score")
+parser.add_argument("--balance", type=float, action='append', help="Define balance number to calculate score")
 parser.add_argument("--batch_size", type=int, default=64, help="Define batch size to train model")
 parser.add_argument("--epochs", type=int, default=300, help="Define epochs to train model")
 parser.add_argument("--lr", type=int, default=0.0002, help="Define learning rate to train model")
 parser.add_argument("--pool", type=int, default=128, help="Define the number of pool to GA algorithm")
 parser.add_argument("--generation", type=int, default=1000, help="Define the number of generation to GA algorithm")
-
-
 
 
 opt = parser.parse_args()
@@ -166,7 +165,7 @@ def main():
             pruned_metrics : ['allocator_rss_bytes', 'rss_overhead_bytes', 'used_memory_dataset', 'rdb_last_cow_size']
     """
     logger.info("\n\n====================== run_workload_characterization ====================")
-    pruned_metrics = run_workload_characterization(train_internal_data, cluster_threshold= opt.cluster, skip=opt.isskip)
+    pruned_metrics = run_workload_characterization(train_internal_data, logger, cluster_threshold= opt.cluster, skip=opt.isskip)
     logger.info("Done pruning metrics for workload {} (# of pruned metrics: {}).\n\n""Pruned metrics: {}\n".format(opt.persistence, len(pruned_metrics),pruned_metrics))
     metric_idxs = [i for i, metric_name in enumerate(train_internal_data['columnlabels']) if metric_name in pruned_metrics]
     ranked_metric_data = {
@@ -199,9 +198,8 @@ def main():
     
     logger.info("\n\n================ The number of TOP {} knobs ===============".format(top_k))
     if opt.topk != -1:
-        ranked_test_knob_data = get_ranked_knob_data(ranked_knobs, knob_data, top_k)        
+        ranked_test_knob_data = get_ranked_knob_data(ranked_knobs, knob_data, top_k)
         logger.info('Pruned Ranked knobs: {}'.format(ranked_test_knob_data['columnlabels']))
-        knob_data = ranked_test_knob_data
     else:
         logger.info("Skipping pruning ranked knobs")
 
