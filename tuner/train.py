@@ -26,7 +26,7 @@ parser.add_argument("--rki",type=str, default='lasso', help = "knob_identificati
 parser.add_argument("--gp", type=str, default="numpy")
 parser.add_argument("--target", type=int, default=16, help="Choose which workload will be tagrget dataset, 0~15 are pre-gained worklaods, 16~ is a new target workload in folder")
 parser.add_argument("--targetsize", type=int, default=20, help="Define the number of target workload data")
-# related run_knob_identification
+# related run_knob_identification, choose top k parameter for tuning, others are set to default.
 parser.add_argument("--topk", type=int, default=-1, help="Define k to prune knob ranking data") 
 # related run_workload_characterization
 parser.add_argument("--isskip", type=bool, default=True, help="Skip the workload characterization or not") 
