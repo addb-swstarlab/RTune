@@ -346,11 +346,13 @@ def generation_combined_workload(wk_internal_metrics, wk_external_metrics, targe
         if target_wk > 15:
             target_wk = 16
             #     df_wk_internal_metric = pd.read_csv(os.path.join(target_result_path, target_wk, 'external_results_11.csv'), index_col=0)
-        wk_stats = df_wk_internal_metric.describe().T.drop(columns=drop_columns)
-        wk_stats_list.append(wk_stats.T)
+        wk_stats = df_wk_internal_metric.describe().T.drop(columns=drop_columns) # (148, 5)
+        wk_stats_list.append(wk_stats.T) # (5, 148)
+
 
     ## Get Convariance from internal metric data
-    cov_internal_metrics = pd.concat(wk_stats_list, axis=1).T.cov()
+    cov_internal_metrics = pd.concat(wk_stats_list, axis=1).T.cov() # (5, 148*16) => (148*16, 5) => (5, 5)
+
 
     ## Get Mahalanobis distance list
     int_idx = wk_stats_list[0].columns
@@ -359,7 +361,8 @@ def generation_combined_workload(wk_internal_metrics, wk_external_metrics, targe
     for wk, wk_stats in enumerate(wk_stats_list):
         sum_d = 0
         for idx in int_idx:
-            d = distance.mahalanobis(u=wk_stats[idx], v=wk_stats_list[target_wk][idx], VI=np.linalg.pinv(cov_internal_metrics))
+            #d = distance.mahalanobis(u=wk_stats[idx], v=wk_stats_list[target_wk][idx], VI=np.linalg.pinv(cov_internal_metrics))            
+            d = distance.cosine(u=wk_stats[idx], v=wk_stats_list[target_wk][idx])            
             sum_d += d
         wk_mah_dis[wk] = sum_d
         logger.info(f"{wk}th workload get distance {sum_d}")
