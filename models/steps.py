@@ -358,12 +358,17 @@ def generation_combined_workload(wk_internal_metrics, wk_external_metrics, targe
     int_idx = wk_stats_list[0].columns
     wk_mah_dis = {}
 
+    
     for wk, wk_stats in enumerate(wk_stats_list):
         sum_d = 0
         for idx in int_idx:
-            #d = distance.mahalanobis(u=wk_stats[idx], v=wk_stats_list[target_wk][idx], VI=np.linalg.pinv(cov_internal_metrics))            
-            d = distance.cosine(u=wk_stats[idx], v=wk_stats_list[target_wk][idx])            
+            # d = distance.mahalanobis(u=wk_stats[idx], v=wk_stats_list[target_wk][idx], VI=np.linalg.pinv(cov_internal_metrics))            
+            ## for computing cosine distance, replace 0 to small nubmer ##
+            if wk_stats_list[target_wk][idx]['mean'] == 0:
+                wk_stats_list[target_wk][idx]['mean'] = 0.00000001
+            d = distance.cosine(u=wk_stats[idx], v=wk_stats_list[target_wk][idx])
             sum_d += d
+        logger.info(f"{sum_d}")
         wk_mah_dis[wk] = sum_d
         logger.info(f"{wk}th workload get distance {sum_d}")
 
