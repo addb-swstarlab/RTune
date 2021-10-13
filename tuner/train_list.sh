@@ -71,6 +71,11 @@
 END
 
 # test on 11.8
-./train.sh "cos_1108_1" true true -1 0.25 0.25 0.25 0.25 multi SCORE 0
-./train.sh "cos_1108_2" true true -1 0.25 0.25 0.25 0.25 multi SCORE 6
-./train.sh "cos_1108_3" true true -1 0.25 0.25 0.25 0.25 multi SCORE 12
+#./train.sh "cos_1108_1" true true -1 0.25 0.25 0.25 0.25 multi SCORE 0
+#./train.sh "cos_1108_2" true true -1 0.25 0.25 0.25 0.25 multi SCORE 6
+#./train.sh "cos_1108_3" true true -1 0.25 0.25 0.25 0.25 multi SCORE 12
+./train.sh "cos_1108_4" true true -1 0.25 0.25 0.25 0.25 multi SCORE 18
+./train.sh "cos_1108_5" true true -1 0.25 0.25 0.25 0.25 multi SCORE 24
+./train.sh "cos_1108_6" true true -1 0.25 0.25 0.25 0.25 multi SCORE 30
+./train.sh "cos_1108_7" true true -1 0.25 0.25 0.25 0.25 multi SCORE 36
+./train.sh "cos_1108_8" true true -1 0.25 0.25 0.25 0.25 multi SCORE 42
