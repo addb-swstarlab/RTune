@@ -4,5 +4,6 @@ We have generated 16 basic RocksDB workloads for tuning and analysis, and 6 targ
 Using the above system, we successfully found the best solutions for different workloads and hardware environments.
 We conducted the experiments among default settings, facebook recommendation, DBA recommendation and our model and avhieved exellent performance except one target workload.
 Some study has mentioned that using pruned internal metrics may ahieve the similar performance when tuing a database, but the experiment carried by using pruned internal metrics showed that it is still better to use full internal metrcis for it contains more information about a workload. 
+In addition, using only a little important konbs could also achieve great performance according to the previous study. Thus, we carry out the expriment using 3, 5, 7 important knobs for tuning, and the selection progress is done by random forest. The results showed that tuning all of the knobs at the same time achieved better performance in all target workloads.
 The generated RocksDB data is not in the repository because it is still used in the progess, if you want to access the data, or the specific way to generate it, please contact us.
 
