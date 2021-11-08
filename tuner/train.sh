@@ -17,7 +17,7 @@ do
     then
         cal_num="0$cal_num"
     fi
-    best_configs_file_name="20211104/best_config-20211104-$cal_num.csv"
+    best_configs_file_name="20211108/best_config-20211108-$cal_num.csv"
     # train model and get the best configuration
     python train.py --iscombined $2 --isskip $3 --topk $4 --balance $5 --balance $6 --balance $7 --balance $8 --mode "$9" --exmetric "${10}" --target $i 
     # parsing the best configuration with the form of .cnf

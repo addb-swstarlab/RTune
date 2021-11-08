@@ -66,6 +66,11 @@
 ./train.sh "fillrandom" true true -1 0.25 0.25 0.25 0.25 multi SCORE 2
 ./train.sh "fillrandom" true true -1 0.25 0.25 0.25 0.25 multi SCORE 3
 
-END
 # test on 11.4
 ./train.sh "cos_1104" true true -1 0.25 0.25 0.25 0.25 multi SCORE 0
+END
+
+# test on 11.8
+./train.sh "cos_1108_1" true true -1 0.25 0.25 0.25 0.25 multi SCORE 0
+./train.sh "cos_1108_2" true true -1 0.25 0.25 0.25 0.25 multi SCORE 6
+./train.sh "cos_1108_3" true true -1 0.25 0.25 0.25 0.25 multi SCORE 12
