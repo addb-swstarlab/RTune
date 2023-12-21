@@ -3,7 +3,7 @@ import time
 import sys
 import http.client
 
-
+# Use XML-RPC to connect 
 class TimeoutTransport(xmlrpc.client.Transport):
     timeout = 30.0
 
