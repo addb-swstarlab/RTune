@@ -2,6 +2,7 @@
 
 clear
 
+# Record the time when start the script
 beginTime=$(date +%s%N)
 
 # initiate the comp_results.csv file
@@ -30,6 +31,7 @@ done
 
 sshpass -p 1423 ssh jieun@10.178.15.229 "cp comp_results.csv $1.csv"
 
+# Record the time when end the scripts
 endTime=$(date +%s%N)
 elapsed=`echo "($endTime - $beginTime) / 1000000" | bc`
 elapsedSec=`echo "scale=2;$elapsed / 1000" | bc | awk '{printf "%d", $1}'`
